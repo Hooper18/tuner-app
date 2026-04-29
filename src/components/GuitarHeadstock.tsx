@@ -36,6 +36,27 @@ interface Props {
 const IN_TUNE_CENTS = 5;
 const MAX_MATCH_SEMITONES = 6;
 
+// SVG geometry — tuning peg positions match the button positions on each side.
+const VIEW_W = 200;
+const VIEW_H = 360;
+const PEG_LEFT_X = 50;
+const PEG_RIGHT_X = 150;
+const PEG_TOP_Y = 90;
+const PEG_MID_Y = 165;
+const PEG_BOT_Y = 240;
+
+// Mapping: visual position → string index per spec (left bottom→top E2 A2 D3, right bottom→top G3 B3 E4).
+const LEFT_PEGS: { y: number; idx: number }[] = [
+  { y: PEG_TOP_Y, idx: 2 }, // D3
+  { y: PEG_MID_Y, idx: 1 }, // A2
+  { y: PEG_BOT_Y, idx: 0 }, // E2
+];
+const RIGHT_PEGS: { y: number; idx: number }[] = [
+  { y: PEG_TOP_Y, idx: 5 }, // E4
+  { y: PEG_MID_Y, idx: 4 }, // B3
+  { y: PEG_BOT_Y, idx: 3 }, // G3
+];
+
 function pickClosestString(strings: StringInfo[], midiNote: number): number | null {
   if (strings.length === 0) return null;
   let best = 0;
@@ -90,60 +111,170 @@ function StringButton({
   isActive,
   isInTune,
   onClick,
+  style,
 }: {
   noteName: string;
   octave: number;
   isActive: boolean;
   isInTune: boolean;
   onClick: () => void;
+  style?: React.CSSProperties;
 }) {
   const state = isInTune
     ? 'bg-accent border-accent text-deep shadow-[0_0_18px_rgba(74,222,128,0.55)]'
     : isActive
-    ? 'bg-elev-2 border-accent-warn text-fg'
-    : 'bg-elev border-line text-fg-dim';
+    ? 'bg-elev/80 border-accent-warn text-fg shadow-[0_0_10px_rgba(249,115,22,0.4)]'
+    : 'bg-elev/70 border-line/70 text-fg';
 
   return (
     <button
       onClick={onClick}
-      className={`flex h-14 w-14 flex-col items-center justify-center rounded-full border-2 transition-all duration-200 active:scale-95 ${state}`}
+      style={style}
+      className={`absolute flex h-11 w-11 -translate-y-1/2 flex-col items-center justify-center rounded-full border-2 backdrop-blur-sm transition-all duration-200 active:scale-95 ${state}`}
     >
-      <span className="text-lg font-semibold leading-none">{noteName}</span>
-      <span className="mt-0.5 text-[10px] leading-none opacity-70">{octave}</span>
+      <span className="text-base font-semibold leading-none">{noteName}</span>
+      <span className="mt-0.5 text-[9px] leading-none opacity-70">{octave}</span>
     </button>
   );
 }
 
-function HeadstockOutline() {
+function HeadstockSVG() {
   return (
     <svg
-      viewBox="0 0 360 360"
-      className="absolute inset-0 h-full w-full"
+      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
       preserveAspectRatio="xMidYMid meet"
+      className="h-full w-full"
       aria-hidden
     >
       <defs>
-        <linearGradient id="headstockGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--color-elev)" />
-          <stop offset="100%" stopColor="var(--color-elev-2)" />
+        <linearGradient id="hs-wood" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#5a3d2b" />
+          <stop offset="35%" stopColor="#6b4c3b" />
+          <stop offset="70%" stopColor="#503426" />
+          <stop offset="100%" stopColor="#3d2b1f" />
         </linearGradient>
+        <linearGradient id="hs-wood-side" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="rgba(0,0,0,0.35)" />
+          <stop offset="20%" stopColor="rgba(0,0,0,0)" />
+          <stop offset="80%" stopColor="rgba(0,0,0,0)" />
+          <stop offset="100%" stopColor="rgba(0,0,0,0.35)" />
+        </linearGradient>
+        <linearGradient id="hs-neck" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#2a1810" />
+          <stop offset="100%" stopColor="#150a05" />
+        </linearGradient>
+        <radialGradient id="hs-peg" cx="0.32" cy="0.3" r="0.85">
+          <stop offset="0%" stopColor="#fafafa" />
+          <stop offset="35%" stopColor="#d4d4d4" />
+          <stop offset="75%" stopColor="#9a9a9a" />
+          <stop offset="100%" stopColor="#5a5a5a" />
+        </radialGradient>
+        <radialGradient id="hs-peg-hole" cx="0.5" cy="0.5" r="0.6">
+          <stop offset="0%" stopColor="#0a0604" />
+          <stop offset="100%" stopColor="#3d2b1f" />
+        </radialGradient>
       </defs>
-      <path
-        d="M 70 30 Q 35 30 35 70 L 35 250 Q 35 285 70 285 L 145 285 L 145 320 Q 145 335 160 335 L 200 335 Q 215 335 215 320 L 215 285 L 290 285 Q 325 285 325 250 L 325 70 Q 325 30 290 30 Z"
-        fill="url(#headstockGrad)"
-        stroke="var(--color-line)"
-        strokeWidth="2"
-      />
-      {/* nut line */}
+
+      {/* Neck stub behind body */}
+      <rect x="76" y="285" width="48" height="80" rx="3" fill="url(#hs-neck)" />
       <line
-        x1="155"
+        x1="100"
+        y1="290"
+        x2="100"
+        y2="360"
+        stroke="rgba(255,255,255,0.05)"
+        strokeWidth="0.6"
+      />
+
+      {/* Headstock body */}
+      <path
+        d="M 30 60 C 30 25 60 15 100 15 C 140 15 170 25 170 60 L 170 280 Q 170 295 155 295 L 45 295 Q 30 295 30 280 Z"
+        fill="url(#hs-wood)"
+        stroke="#1f140c"
+        strokeWidth="1.5"
+      />
+      {/* Side shading overlay */}
+      <path
+        d="M 30 60 C 30 25 60 15 100 15 C 140 15 170 25 170 60 L 170 280 Q 170 295 155 295 L 45 295 Q 30 295 30 280 Z"
+        fill="url(#hs-wood-side)"
+      />
+
+      {/* Wood grain (subtle horizontal curves) */}
+      <g
+        opacity="0.22"
+        stroke="#1a0e08"
+        strokeWidth="0.6"
+        fill="none"
+        strokeLinecap="round"
+      >
+        <path d="M 36 70 Q 100 75 164 70" />
+        <path d="M 36 110 Q 100 105 164 110" />
+        <path d="M 36 140 Q 100 146 164 140" />
+        <path d="M 36 195 Q 100 192 164 195" />
+        <path d="M 36 220 Q 100 225 164 220" />
+        <path d="M 36 270 Q 100 268 164 270" />
+      </g>
+
+      {/* Top edge highlight */}
+      <path
+        d="M 32 60 C 32 28 60 18 100 18 C 140 18 168 28 168 60"
+        stroke="rgba(255,255,255,0.18)"
+        strokeWidth="1.2"
+        fill="none"
+      />
+
+      {/* Strings running from each peg down through the nut */}
+      <g stroke="#cfcfcf" strokeWidth="0.7" opacity="0.55" strokeLinecap="round">
+        <line x1={PEG_LEFT_X} y1={PEG_TOP_Y} x2="92" y2="285" />
+        <line x1={PEG_LEFT_X} y1={PEG_MID_Y} x2="95" y2="285" />
+        <line x1={PEG_LEFT_X} y1={PEG_BOT_Y} x2="98" y2="285" />
+        <line x1={PEG_RIGHT_X} y1={PEG_TOP_Y} x2="108" y2="285" />
+        <line x1={PEG_RIGHT_X} y1={PEG_MID_Y} x2="105" y2="285" />
+        <line x1={PEG_RIGHT_X} y1={PEG_BOT_Y} x2="102" y2="285" />
+      </g>
+
+      {/* Nut */}
+      <line
+        x1="78"
         y1="285"
-        x2="205"
+        x2="122"
         y2="285"
-        stroke="var(--color-fg-dim)"
-        strokeWidth="3"
+        stroke="#e8e8e8"
+        strokeWidth="2.4"
         strokeLinecap="round"
       />
+
+      {/* Tuning pegs (3 left, 3 right) — drop-shadow + metallic gradient + center hole */}
+      <g>
+        {[
+          { x: PEG_LEFT_X, y: PEG_TOP_Y },
+          { x: PEG_LEFT_X, y: PEG_MID_Y },
+          { x: PEG_LEFT_X, y: PEG_BOT_Y },
+          { x: PEG_RIGHT_X, y: PEG_TOP_Y },
+          { x: PEG_RIGHT_X, y: PEG_MID_Y },
+          { x: PEG_RIGHT_X, y: PEG_BOT_Y },
+        ].map((p, i) => (
+          <g key={i}>
+            <ellipse
+              cx={p.x}
+              cy={p.y + 1.5}
+              rx="14"
+              ry="8.5"
+              fill="rgba(0,0,0,0.45)"
+            />
+            <ellipse
+              cx={p.x}
+              cy={p.y}
+              rx="14"
+              ry="8.5"
+              fill="url(#hs-peg)"
+              stroke="#3a3a3a"
+              strokeWidth="0.5"
+            />
+            <ellipse cx={p.x} cy={p.y} rx="3" ry="2" fill="url(#hs-peg-hole)" />
+          </g>
+        ))}
+      </g>
     </svg>
   );
 }
@@ -220,14 +351,35 @@ export function GuitarHeadstock({
     }
   }
 
-  // String index → visual position. Index 0 is the lowest-pitched (6th) string.
-  // Layout per spec: left bottom→top E A D, right bottom→top G B E.
-  const leftCol = [strings[2], strings[1], strings[0]]; // top to bottom
-  const rightCol = [strings[5], strings[4], strings[3]];
+  const renderButton = (peg: { y: number; idx: number }, side: 'left' | 'right') => {
+    const s = strings[peg.idx];
+    const topPercent = (peg.y / VIEW_H) * 100;
+    const positionStyle: React.CSSProperties =
+      side === 'left'
+        ? { top: `${topPercent}%`, right: '100%', marginRight: '0.5rem' }
+        : { top: `${topPercent}%`, left: '100%', marginLeft: '0.5rem' };
+    return (
+      <StringButton
+        key={peg.idx}
+        noteName={s.noteName}
+        octave={s.octave}
+        isActive={activeIdx === peg.idx}
+        isInTune={activeIdx === peg.idx && activeInTune}
+        onClick={() =>
+          onStringTap(peg.idx, {
+            noteName: s.noteName,
+            octave: s.octave,
+            frequency: s.frequency,
+          })
+        }
+        style={positionStyle}
+      />
+    );
+  };
 
   return (
-    <div className="flex h-full w-full flex-col items-center">
-      <div className="flex w-full max-w-md items-center justify-end px-6 py-2">
+    <div className="flex h-full w-full flex-col">
+      <div className="flex shrink-0 items-center justify-end px-4 pt-2 pb-1">
         <ModeToggle
           autoMode={autoMode}
           onToggle={onModeToggle}
@@ -236,47 +388,14 @@ export function GuitarHeadstock({
         />
       </div>
 
-      <div className="relative flex w-full max-w-md flex-1 items-center justify-center px-6 pb-3">
-        <div className="relative aspect-[360/360] w-full">
-          <HeadstockOutline />
-          <div className="absolute inset-0 flex items-stretch justify-between px-[10%] py-[10%]">
-            <div className="flex flex-col items-center justify-around">
-              {leftCol.map((s) => (
-                <StringButton
-                  key={s.index}
-                  noteName={s.noteName}
-                  octave={s.octave}
-                  isActive={activeIdx === s.index}
-                  isInTune={activeIdx === s.index && activeInTune}
-                  onClick={() =>
-                    onStringTap(s.index, {
-                      noteName: s.noteName,
-                      octave: s.octave,
-                      frequency: s.frequency,
-                    })
-                  }
-                />
-              ))}
-            </div>
-            <div className="flex flex-col items-center justify-around">
-              {rightCol.map((s) => (
-                <StringButton
-                  key={s.index}
-                  noteName={s.noteName}
-                  octave={s.octave}
-                  isActive={activeIdx === s.index}
-                  isInTune={activeIdx === s.index && activeInTune}
-                  onClick={() =>
-                    onStringTap(s.index, {
-                      noteName: s.noteName,
-                      octave: s.octave,
-                      frequency: s.frequency,
-                    })
-                  }
-                />
-              ))}
-            </div>
-          </div>
+      <div className="flex flex-1 items-center justify-center px-2 pb-3 min-h-0">
+        <div
+          className="relative h-full"
+          style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}`, maxWidth: '40vw' }}
+        >
+          <HeadstockSVG />
+          {LEFT_PEGS.map((p) => renderButton(p, 'left'))}
+          {RIGHT_PEGS.map((p) => renderButton(p, 'right'))}
         </div>
       </div>
     </div>

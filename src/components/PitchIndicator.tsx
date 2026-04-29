@@ -151,9 +151,14 @@ export function PitchIndicator({
         </button>
       </header>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center px-6">
-        <div className="relative w-full max-w-md">
-          <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="w-full">
+      <div className="relative flex flex-1 flex-col items-center justify-center px-6 min-h-0 overflow-hidden">
+        <div className="relative w-full max-w-md" style={{ maxHeight: '55%' }}>
+          <svg
+            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+            preserveAspectRatio="xMidYMid meet"
+            className="w-full"
+            style={{ maxHeight: '100%' }}
+          >
             {/* Base arc */}
             <path
               d={`M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY}`}
@@ -211,23 +216,23 @@ export function PitchIndicator({
           </div>
         </div>
 
-        <div className="mt-2 flex flex-col items-center">
+        <div className="mt-1 flex shrink-0 flex-col items-center">
           <div
             className={`flex items-baseline gap-1 transition-colors duration-150 ${noteColorClass} ${
               isTight ? 'glow-in-tune' : ''
             }`}
           >
-            <span className="text-7xl font-light leading-none tracking-tight">
+            <span className="text-6xl font-light leading-none tracking-tight">
               {displayNote}
             </span>
             {displayOctave !== null && (
-              <span className="self-start mt-1 text-2xl text-fg-mute">
+              <span className="self-start mt-0.5 text-xl text-fg-mute">
                 {displayOctave}
               </span>
             )}
           </div>
 
-          <div className="mt-2 text-sm tabular-nums text-fg-mute">
+          <div className="mt-1 text-sm tabular-nums text-fg-mute">
             {displayFreq !== null
               ? `${displayFreq.toFixed(1)} ${t('tuner.hzUnit')}`
               : `— ${t('tuner.hzUnit')}`}

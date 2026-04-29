@@ -16,7 +16,8 @@
 html,
 body,
 #root {
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
   margin: 0;
   background-color: var(--color-deep);
   color: var(--color-fg);
@@ -40,6 +41,7 @@ body {
   width: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 button {

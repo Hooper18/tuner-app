@@ -1,13 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AudioEngine } from '../audio/AudioEngine';
 import { YINPitchDetector } from '../audio/YINPitchDetector';
-import { frequencyToPitchData } from '../audio/noteUtils';
+import { centsBetween, frequencyToPitchData } from '../audio/noteUtils';
 import type { PermissionStatus, PitchData } from '../types/tuner';
 
 const FFT_SIZE = 4096;
 const RMS_GATE = 0.01;
 const MEDIAN_WINDOW = 5;
 const FRAME_SKIP = 3; // run YIN every 3rd rAF frame ≈ 20fps
+
+// Attack-onset suppression — pluck transients usually return a low-octave artefact
+// for the first frame or two. We gate output for ATTACK_GATE_MS after detecting an
+// RMS jump > ATTACK_RMS_RATIO×, keeping the previously-displayed pitch in place.
+const ATTACK_RMS_RATIO = 3;
+const ATTACK_GATE_MS = 150;
+
+// Octave-jump filter — a YIN result more than half an octave away from the
+// current stable estimate must be confirmed by STABILITY_FRAMES consecutive
+// detections within STABILITY_CENTS of each other before we switch displays.
+// Single-frame jumps (typical of attack-tail glitches) are dropped.
+const OCTAVE_JUMP_HI = 1.4;
+const OCTAVE_JUMP_LO = 0.7;
+const STABILITY_FRAMES = 3;
+const STABILITY_CENTS = 30;
 
 export interface UsePitchDetectionResult {
   pitch: PitchData | null;
@@ -41,10 +56,24 @@ export function usePitchDetection(a4: number): UsePitchDetectionResult {
   const frameCountRef = useRef(0);
   const a4Ref = useRef(a4);
 
+  // Onset / jump-filter state
+  const prevRmsRef = useRef(0);
+  const onsetTimeRef = useRef(Number.NEGATIVE_INFINITY);
+  const stableFreqRef = useRef<number | null>(null);
+  const candidateFreqRef = useRef<number | null>(null);
+  const candidateCountRef = useRef(0);
+
   // Keep a4 fresh so the loop reads the latest value without restarting.
   useEffect(() => {
     a4Ref.current = a4;
   }, [a4]);
+
+  const resetTracking = () => {
+    historyRef.current = [];
+    stableFreqRef.current = null;
+    candidateFreqRef.current = null;
+    candidateCountRef.current = 0;
+  };
 
   const stop = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -52,7 +81,9 @@ export function usePitchDetection(a4: number): UsePitchDetectionResult {
     engineRef.current?.stop();
     engineRef.current = null;
     detectorRef.current = null;
-    historyRef.current = [];
+    resetTracking();
+    prevRmsRef.current = 0;
+    onsetTimeRef.current = Number.NEGATIVE_INFINITY;
     setPitch(null);
     setRms(0);
   }, []);
@@ -98,19 +129,81 @@ export function usePitchDetection(a4: number): UsePitchDetectionResult {
         if (buf) {
           const r = eng.getRMS();
           setRms(r);
+
+          // Onset detection: large RMS rise = string just got plucked
+          if (
+            prevRmsRef.current > 0 &&
+            r > prevRmsRef.current * ATTACK_RMS_RATIO
+          ) {
+            onsetTimeRef.current = performance.now();
+          }
+          prevRmsRef.current = r;
+          const inAttackGate =
+            performance.now() - onsetTimeRef.current < ATTACK_GATE_MS;
+
           if (r < RMS_GATE) {
-            if (historyRef.current.length > 0) historyRef.current = [];
+            // signal lost — clear everything
+            resetTracking();
             setPitch(null);
+          } else if (inAttackGate) {
+            // Attack transient — suppress detection output.
+            // setPitch is intentionally not called so React keeps the
+            // previously-displayed value (or null if there wasn't one).
           } else {
             const freq = det.detect(buf);
-            if (freq !== null) {
-              const hist = historyRef.current;
-              hist.push(freq);
-              if (hist.length > MEDIAN_WINDOW) hist.shift();
-              setPitch(frequencyToPitchData(median(hist), a4Ref.current));
-            } else {
-              if (historyRef.current.length > 0) historyRef.current = [];
+            if (freq === null) {
+              resetTracking();
               setPitch(null);
+            } else {
+              const stable = stableFreqRef.current;
+              if (stable === null) {
+                // Bootstrap — first valid detection after silence/onset.
+                const hist = historyRef.current;
+                hist.push(freq);
+                if (hist.length > MEDIAN_WINDOW) hist.shift();
+                const med = median(hist);
+                stableFreqRef.current = med;
+                candidateFreqRef.current = null;
+                candidateCountRef.current = 0;
+                setPitch(frequencyToPitchData(med, a4Ref.current));
+              } else {
+                const ratio = freq / stable;
+                const isJump =
+                  ratio < OCTAVE_JUMP_LO || ratio > OCTAVE_JUMP_HI;
+                if (isJump) {
+                  // Possible new pitch — confirm over consecutive frames.
+                  const cand = candidateFreqRef.current;
+                  if (
+                    cand !== null &&
+                    Math.abs(centsBetween(freq, cand)) <= STABILITY_CENTS
+                  ) {
+                    candidateCountRef.current += 1;
+                  } else {
+                    candidateFreqRef.current = freq;
+                    candidateCountRef.current = 1;
+                  }
+                  if (candidateCountRef.current >= STABILITY_FRAMES) {
+                    // Confirmed — switch over.
+                    const accepted = candidateFreqRef.current ?? freq;
+                    historyRef.current = [accepted];
+                    stableFreqRef.current = accepted;
+                    candidateFreqRef.current = null;
+                    candidateCountRef.current = 0;
+                    setPitch(frequencyToPitchData(accepted, a4Ref.current));
+                  }
+                  // else: drop this frame — keep displaying the existing stable pitch
+                } else {
+                  // Normal flow — feed median, update stable, emit.
+                  candidateFreqRef.current = null;
+                  candidateCountRef.current = 0;
+                  const hist = historyRef.current;
+                  hist.push(freq);
+                  if (hist.length > MEDIAN_WINDOW) hist.shift();
+                  const med = median(hist);
+                  stableFreqRef.current = med;
+                  setPitch(frequencyToPitchData(med, a4Ref.current));
+                }
+              }
             }
           }
         }
