@@ -11,6 +11,16 @@
   --color-accent-warm: #fbbf24;
   --color-accent-warn: #f97316;
   --color-line: #3a3a5c;
+  --animate-tune-pop: tune-pop 300ms ease-out;
+}
+
+@keyframes tune-pop {
+  0% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 html,

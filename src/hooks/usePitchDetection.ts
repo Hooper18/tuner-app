@@ -30,6 +30,12 @@ export interface UsePitchDetectionResult {
   permission: PermissionStatus;
   error: string | null;
   start: () => Promise<void>;
+  /**
+   * Silent permission check — only starts the engine if the browser already
+   * has microphone permission. Resolves to true on auto-start, false if a UI
+   * prompt is required. Never triggers a permission dialog itself.
+   */
+  tryAutoStart: () => Promise<boolean>;
   stop: () => void;
   playReferenceTone: (frequency: number, durationSec?: number) => void;
 }
@@ -215,6 +221,44 @@ export function usePitchDetection(a4: number): UsePitchDetectionResult {
     rafRef.current = requestAnimationFrame(tick);
   }, []);
 
+  const tryAutoStart = useCallback(async (): Promise<boolean> => {
+    if (engineRef.current) return true;
+    if (!navigator.mediaDevices?.getUserMedia) return false;
+
+    let alreadyGranted = false;
+
+    try {
+      // Modern path: ask the Permissions API directly. No UI is shown.
+      const result = await navigator.permissions?.query({
+        name: 'microphone' as PermissionName,
+      });
+      if (result?.state === 'granted') {
+        alreadyGranted = true;
+      } else if (result) {
+        // 'prompt' or 'denied' — defer to user gesture.
+        return false;
+      } else {
+        throw new Error('permissions.query unsupported');
+      }
+    } catch {
+      // Safari fallback: probe getUserMedia. If the browser silently grants
+      // (because permission was previously given), we have access; otherwise
+      // it rejects (often NotAllowedError without a gesture) and we bail to
+      // the explicit-permission UI.
+      try {
+        const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+        for (const track of probe.getTracks()) track.stop();
+        alreadyGranted = true;
+      } catch {
+        return false;
+      }
+    }
+
+    if (!alreadyGranted) return false;
+    await start();
+    return true;
+  }, [start]);
+
   const playReferenceTone = useCallback((frequency: number, durationSec?: number) => {
     engineRef.current?.playReferenceTone(frequency, durationSec);
   }, []);
@@ -222,5 +266,14 @@ export function usePitchDetection(a4: number): UsePitchDetectionResult {
   // Release mic when the consumer unmounts.
   useEffect(() => () => stop(), [stop]);
 
-  return { pitch, rms, permission, error, start, stop, playReferenceTone };
+  return {
+    pitch,
+    rms,
+    permission,
+    error,
+    start,
+    tryAutoStart,
+    stop,
+    playReferenceTone,
+  };
 }
