@@ -143,18 +143,20 @@ function StringButton({
   onClick: () => void;
 }) {
   // Per spec: only the note letter — no octave digit. Default = subtle dark fill +
-  // muted border + white text. Active = white border. Tuned = green text & border
-  // (background unchanged) plus a one-shot pop animation.
+  // visibly muted border + white text. Active = full-white border. Tuned = green
+  // text & border (background unchanged) plus a one-shot pop animation.
+  // (Note: `border-line/70` was too low-contrast on bg-deep — switched to
+  // `border-fg-mute/55` so the circle outline is clearly readable.)
   const state = isTuned
     ? 'border-accent text-accent animate-tune-pop'
     : isActive
     ? 'border-fg text-fg'
-    : 'border-line/70 text-fg';
+    : 'border-fg-mute/55 text-fg';
 
   return (
     <button
       onClick={onClick}
-      className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-elev/40 transition-colors duration-200 active:scale-95 ${state}`}
+      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-solid bg-elev/40 transition-colors duration-200 active:scale-95 ${state}`}
     >
       <span className="text-lg font-semibold leading-none">{noteName}</span>
     </button>
@@ -245,66 +247,73 @@ function HeadstockSVG() {
         fill="none"
       />
 
-      {/* Tuning pegs — chrome bell knobs mounted on the body sides */}
+      {/* Tuning pegs — chrome bell knobs mounted on the body sides.
+          Geometry: handle ellipse rx=14 ry=10 with cx outside the body edge,
+          post collar 10×7 bridging handle to body. */}
       {LEFT_PEGS.map((p) => (
         <g key={`peg-l-${p.y}`}>
-          {/* dark post collar where peg meets the body */}
+          {/* dark post collar — overlaps body edge at right end, butts handle at left */}
           <rect
-            x={BODY_LEFT - 8}
-            y={p.y - 3}
-            width="8"
-            height="6"
+            x="22"
+            y={p.y - 3.5}
+            width="10"
+            height="7"
             fill="#2a2a2a"
+            stroke="#161616"
+            strokeWidth="0.4"
             rx="1"
           />
-          {/* chrome knob extending outward */}
+          {/* chrome knob extending outward (cx=12 < BODY_LEFT=28) */}
           <ellipse
-            cx="11"
+            cx="12"
             cy={p.y}
-            rx="9"
-            ry="7"
+            rx="14"
+            ry="10"
             fill="url(#hs-chrome)"
             stroke="#404040"
-            strokeWidth="0.5"
+            strokeWidth="0.6"
           />
           {/* center detail (suggestion of a knurled center) */}
-          <ellipse cx="11" cy={p.y} rx="2.5" ry="1.5" fill="rgba(0,0,0,0.45)" />
+          <ellipse cx="12" cy={p.y} rx="3.5" ry="2" fill="rgba(0,0,0,0.5)" />
           {/* top sheen */}
           <ellipse
-            cx="11"
-            cy={p.y - 3}
-            rx="6"
-            ry="1.5"
-            fill="rgba(255,255,255,0.55)"
+            cx="12"
+            cy={p.y - 4}
+            rx="9"
+            ry="2"
+            fill="rgba(255,255,255,0.6)"
           />
         </g>
       ))}
       {RIGHT_PEGS.map((p) => (
         <g key={`peg-r-${p.y}`}>
           <rect
-            x={BODY_RIGHT}
-            y={p.y - 3}
-            width="8"
-            height="6"
+            x="128"
+            y={p.y - 3.5}
+            width="10"
+            height="7"
             fill="#2a2a2a"
+            stroke="#161616"
+            strokeWidth="0.4"
             rx="1"
           />
+          {/* cx=148 > BODY_RIGHT=132 */}
           <ellipse
-            cx="149"
+            cx="148"
             cy={p.y}
-            rx="9"
-            ry="7"
+            rx="14"
+            ry="10"
             fill="url(#hs-chrome)"
             stroke="#404040"
-            strokeWidth="0.5"
+            strokeWidth="0.6"
           />
-          <ellipse cx="149" cy={p.y} rx="2.5" ry="1.5" fill="rgba(0,0,0,0.45)" />
+          <ellipse cx="148" cy={p.y} rx="3.5" ry="2" fill="rgba(0,0,0,0.5)" />
           <ellipse
-            cx="149"
-            cy={p.y - 3}
-            rx="6"
-            ry="1.5"
-            fill="rgba(255,255,255,0.55)"
+            cx="148"
+            cy={p.y - 4}
+            rx="9"
+            ry="2"
+            fill="rgba(255,255,255,0.6)"
           />
         </g>
       ))}
