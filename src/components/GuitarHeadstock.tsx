@@ -38,17 +38,20 @@ const IN_TUNE_CENTS = 5;
 const MAX_MATCH_SEMITONES = 6;
 const TUNED_SUSTAIN_MS = 1500;
 
-// SVG geometry — realistic shield-shape headstock viewed from the front.
-const VIEW_W = 200;
+// SVG geometry — tall narrow acoustic headstock with V-notch top + 3 pegs per side.
+// viewBox aspect ≈ 4:9, total render aspect ≈ 1:2 per the spec.
+const VIEW_W = 160;
 const VIEW_H = 360;
-const PEG_TOP_Y = 75;
-const PEG_MID_Y = 155;
-const PEG_BOT_Y = 235;
-const NUT_Y = 280;
+const BODY_LEFT = 28;
+const BODY_RIGHT = 132;
+const NUT_Y = 305;
+const PEG_TOP_Y = 80;
+const PEG_MID_Y = 160;
+const PEG_BOT_Y = 240;
 
-// Per spec: looking at the headstock, top→bottom on each side is:
-//   left  → D3 (idx 2), A2 (idx 1), E2 (idx 0)   (low-string side)
-//   right → G3 (idx 3), B3 (idx 4), E4 (idx 5)   (high-string side, fixed in this commit)
+// Per spec: looking at the headstock from the front,
+//   left  top→bottom: D3 (idx 2), A2 (idx 1), E2 (idx 0)
+//   right top→bottom: G3 (idx 3), B3 (idx 4), E4 (idx 5)
 const LEFT_PEGS: { y: number; idx: number }[] = [
   { y: PEG_TOP_Y, idx: 2 }, // D3
   { y: PEG_MID_Y, idx: 1 }, // A2
@@ -60,7 +63,7 @@ const RIGHT_PEGS: { y: number; idx: number }[] = [
   { y: PEG_BOT_Y, idx: 5 }, // E4
 ];
 
-// String thicknesses (in SVG strokeWidth units): low strings thicker, high thinner.
+// Low strings thicker, high strings thinner.
 const STRING_WIDTHS: Record<number, number> = {
   0: 1.0, // E2
   1: 0.9, // A2
@@ -70,14 +73,14 @@ const STRING_WIDTHS: Record<number, number> = {
   5: 0.5, // E4
 };
 
-// Per-string nut x-position (left to right across the nut).
+// Per-string nut x-position — 6 grooves spread across a narrow nut at the body bottom.
 const NUT_X: Record<number, number> = {
-  0: 82, // E2 (leftmost on nut)
-  1: 88, // A2
-  2: 94, // D3
-  3: 106, // G3
-  4: 112, // B3
-  5: 118, // E4 (rightmost on nut)
+  0: 70, // E2 (leftmost groove)
+  1: 74, // A2
+  2: 78, // D3
+  3: 82, // G3
+  4: 86, // B3
+  5: 90, // E4 (rightmost groove)
 };
 
 function pickClosestString(strings: StringInfo[], midiNote: number): number | null {
@@ -130,45 +133,49 @@ function ModeToggle({
 
 function StringButton({
   noteName,
-  octave,
   isActive,
   isTuned,
   onClick,
 }: {
   noteName: string;
-  octave: number;
   isActive: boolean;
   isTuned: boolean;
   onClick: () => void;
 }) {
+  // Per spec: only the note letter — no octave digit. Default = subtle dark fill +
+  // muted border + white text. Active = white border. Tuned = green text & border
+  // (background unchanged) plus a one-shot pop animation.
   const state = isTuned
-    ? 'bg-accent border-accent text-deep shadow-[0_0_18px_rgba(74,222,128,0.55)] animate-tune-pop'
+    ? 'border-accent text-accent animate-tune-pop'
     : isActive
-    ? 'bg-elev/85 border-accent-warn text-fg shadow-[0_0_10px_rgba(249,115,22,0.4)]'
-    : 'bg-elev/70 border-line/70 text-fg';
+    ? 'border-fg text-fg'
+    : 'border-line/70 text-fg';
 
   return (
     <button
       onClick={onClick}
-      className={`flex h-11 w-11 flex-col items-center justify-center rounded-full border-2 backdrop-blur-sm transition-colors duration-200 active:scale-95 ${state}`}
+      className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-elev/40 transition-colors duration-200 active:scale-95 ${state}`}
     >
-      <span className="text-base font-semibold leading-none">{noteName}</span>
-      <span className="mt-0.5 text-[9px] leading-none opacity-70">{octave}</span>
+      <span className="text-lg font-semibold leading-none">{noteName}</span>
     </button>
   );
 }
 
 function HeadstockSVG() {
-  // Shield-shape body path: wide top, gentle concave waist, narrows toward neck.
+  // Tall narrow body, mostly straight sides, V-notch dipping at the top center.
   const bodyPath =
-    'M 100 14 ' +
-    'C 144 14 168 28 170 60 ' +
-    'C 175 100 165 160 162 200 ' +
-    'C 158 245 145 275 125 280 ' +
-    'L 75 280 ' +
-    'C 55 275 42 245 38 200 ' +
-    'C 35 160 25 100 30 60 ' +
-    'C 32 28 56 14 100 14 Z';
+    `M 80 22 ` +
+    `L 75 10 ` +
+    `L 38 10 ` +
+    `Q ${BODY_LEFT} 10 ${BODY_LEFT} 22 ` +
+    `L ${BODY_LEFT} 285 ` +
+    `Q ${BODY_LEFT} ${NUT_Y} 50 ${NUT_Y} ` +
+    `L 110 ${NUT_Y} ` +
+    `Q ${BODY_RIGHT} ${NUT_Y} ${BODY_RIGHT} 285 ` +
+    `L ${BODY_RIGHT} 22 ` +
+    `Q ${BODY_RIGHT} 10 122 10 ` +
+    `L 85 10 ` +
+    `Z`;
 
   return (
     <svg
@@ -185,37 +192,25 @@ function HeadstockSVG() {
           <stop offset="100%" stopColor="#4A2C14" />
         </linearGradient>
         <linearGradient id="hs-wood-h" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="rgba(20,10,4,0.45)" />
-          <stop offset="22%" stopColor="rgba(0,0,0,0)" />
-          <stop offset="78%" stopColor="rgba(0,0,0,0)" />
-          <stop offset="100%" stopColor="rgba(20,10,4,0.45)" />
+          <stop offset="0%" stopColor="rgba(20,10,4,0.5)" />
+          <stop offset="20%" stopColor="rgba(0,0,0,0)" />
+          <stop offset="80%" stopColor="rgba(0,0,0,0)" />
+          <stop offset="100%" stopColor="rgba(20,10,4,0.5)" />
         </linearGradient>
         <linearGradient id="hs-neck" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#3a2515" />
           <stop offset="100%" stopColor="#1a0a04" />
         </linearGradient>
-        <linearGradient id="hs-peg-handle" x1="0.2" y1="0.1" x2="0.8" y2="0.9">
-          <stop offset="0%" stopColor="#fefcf2" />
-          <stop offset="55%" stopColor="#f5f0e0" />
-          <stop offset="100%" stopColor="#c8c0a8" />
-        </linearGradient>
-        <linearGradient id="hs-peg-post" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#a8a8a8" />
-          <stop offset="50%" stopColor="#e0e0e0" />
-          <stop offset="100%" stopColor="#787878" />
+        <linearGradient id="hs-chrome" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f5f5f5" />
+          <stop offset="35%" stopColor="#d4d4d4" />
+          <stop offset="60%" stopColor="#8a8a8a" />
+          <stop offset="100%" stopColor="#3a3a3a" />
         </linearGradient>
       </defs>
 
-      {/* Neck stub (60% of bottom width, behind body) */}
-      <rect x="80" y={NUT_Y - 2} width="40" height="82" fill="url(#hs-neck)" />
-      <line
-        x1="100"
-        y1={NUT_Y + 2}
-        x2="100"
-        y2={NUT_Y + 78}
-        stroke="rgba(255,255,255,0.04)"
-        strokeWidth="0.6"
-      />
+      {/* Neck stub — narrower piece behind/below the body */}
+      <rect x="62" y={NUT_Y - 4} width="36" height="80" fill="url(#hs-neck)" />
 
       {/* Body */}
       <path
@@ -224,127 +219,128 @@ function HeadstockSVG() {
         stroke="#2a1a0a"
         strokeWidth="2"
       />
-      {/* Edge shading overlay */}
+      {/* Side shading for subtle dimensionality */}
       <path d={bodyPath} fill="url(#hs-wood-h)" />
 
-      {/* Wood grain — fine wavy vertical strokes */}
+      {/* Wood grain — subtle near-vertical wavy strokes */}
       <g
-        opacity="0.18"
+        opacity="0.16"
         stroke="#1a0a04"
-        strokeWidth="0.7"
+        strokeWidth="0.6"
         fill="none"
         strokeLinecap="round"
       >
-        <path d="M 55 30 Q 58 100 53 200 T 60 270" />
-        <path d="M 75 22 Q 78 100 73 200 T 78 275" />
-        <path d="M 100 18 Q 103 100 98 200 T 100 277" />
-        <path d="M 125 22 Q 128 100 123 200 T 122 275" />
-        <path d="M 145 30 Q 148 100 143 200 T 140 270" />
+        <path d="M 42 30 Q 44 100 41 200 T 46 285" />
+        <path d="M 60 18 Q 62 100 58 200 T 62 290" />
+        <path d="M 80 14 Q 82 100 78 200 T 80 290" />
+        <path d="M 100 18 Q 102 100 98 200 T 100 290" />
+        <path d="M 120 30 Q 122 100 118 200 T 116 285" />
       </g>
 
-      {/* Top edge highlight — warm sheen along the curved top */}
+      {/* Top edge highlight along the V-notch + corners */}
       <path
-        d="M 35 38 C 50 20 75 14 100 14 C 125 14 150 20 165 38"
-        stroke="rgba(255, 235, 180, 0.28)"
-        strokeWidth="1.5"
+        d={`M ${BODY_LEFT + 2} 24 Q ${BODY_LEFT + 2} 12 38 12 L 75 12 L 80 24 L 85 12 L 122 12 Q ${BODY_RIGHT - 2} 12 ${BODY_RIGHT - 2} 24`}
+        stroke="rgba(255, 230, 175, 0.22)"
+        strokeWidth="1"
         fill="none"
       />
 
-      {/* Tuning pegs — side-view machine heads, three per side */}
+      {/* Tuning pegs — chrome bell knobs mounted on the body sides */}
       {LEFT_PEGS.map((p) => (
         <g key={`peg-l-${p.y}`}>
-          {/* post connecting handle to body */}
+          {/* dark post collar where peg meets the body */}
           <rect
-            x="22"
-            y={p.y - 2.5}
-            width="14"
-            height="5"
-            fill="url(#hs-peg-post)"
-            stroke="#5a5a5a"
-            strokeWidth="0.4"
+            x={BODY_LEFT - 8}
+            y={p.y - 3}
+            width="8"
+            height="6"
+            fill="#2a2a2a"
+            rx="1"
           />
-          {/* large oval handle (ivory) */}
-          <ellipse
-            cx="14"
-            cy={p.y}
-            rx="11"
-            ry="8"
-            fill="url(#hs-peg-handle)"
-            stroke="#8a7a5a"
-            strokeWidth="0.6"
-          />
-          {/* subtle highlight on handle */}
+          {/* chrome knob extending outward */}
           <ellipse
             cx="11"
-            cy={p.y - 2.5}
+            cy={p.y}
+            rx="9"
+            ry="7"
+            fill="url(#hs-chrome)"
+            stroke="#404040"
+            strokeWidth="0.5"
+          />
+          {/* center detail (suggestion of a knurled center) */}
+          <ellipse cx="11" cy={p.y} rx="2.5" ry="1.5" fill="rgba(0,0,0,0.45)" />
+          {/* top sheen */}
+          <ellipse
+            cx="11"
+            cy={p.y - 3}
             rx="6"
-            ry="2.5"
-            fill="rgba(255, 255, 255, 0.4)"
+            ry="1.5"
+            fill="rgba(255,255,255,0.55)"
           />
         </g>
       ))}
       {RIGHT_PEGS.map((p) => (
         <g key={`peg-r-${p.y}`}>
           <rect
-            x="164"
-            y={p.y - 2.5}
-            width="14"
-            height="5"
-            fill="url(#hs-peg-post)"
-            stroke="#5a5a5a"
-            strokeWidth="0.4"
+            x={BODY_RIGHT}
+            y={p.y - 3}
+            width="8"
+            height="6"
+            fill="#2a2a2a"
+            rx="1"
           />
           <ellipse
-            cx="186"
+            cx="149"
             cy={p.y}
-            rx="11"
-            ry="8"
-            fill="url(#hs-peg-handle)"
-            stroke="#8a7a5a"
-            strokeWidth="0.6"
+            rx="9"
+            ry="7"
+            fill="url(#hs-chrome)"
+            stroke="#404040"
+            strokeWidth="0.5"
           />
+          <ellipse cx="149" cy={p.y} rx="2.5" ry="1.5" fill="rgba(0,0,0,0.45)" />
           <ellipse
-            cx="183"
-            cy={p.y - 2.5}
+            cx="149"
+            cy={p.y - 3}
             rx="6"
-            ry="2.5"
-            fill="rgba(255, 255, 255, 0.4)"
+            ry="1.5"
+            fill="rgba(255,255,255,0.55)"
           />
         </g>
       ))}
 
-      {/* Strings — fan from the nut up to each peg, low strings thicker */}
+      {/* Strings — fan from nut to each peg, low strings thicker */}
       <g stroke="#C0C0C0" strokeLinecap="round" opacity="0.9">
         {LEFT_PEGS.map((p) => (
           <line
             key={`str-l-${p.idx}`}
-            x1="36"
+            x1={BODY_LEFT}
             y1={p.y}
             x2={NUT_X[p.idx]}
-            y2={NUT_Y + 1}
+            y2={NUT_Y - 2}
             strokeWidth={STRING_WIDTHS[p.idx]}
           />
         ))}
         {RIGHT_PEGS.map((p) => (
           <line
             key={`str-r-${p.idx}`}
-            x1="164"
+            x1={BODY_RIGHT}
             y1={p.y}
             x2={NUT_X[p.idx]}
-            y2={NUT_Y + 1}
+            y2={NUT_Y - 2}
             strokeWidth={STRING_WIDTHS[p.idx]}
           />
         ))}
       </g>
 
-      {/* Nut — bright bone-colored bar at body bottom */}
+      {/* Nut — bone-colored bar at body bottom */}
       <line
-        x1="78"
-        y1={NUT_Y}
-        x2="122"
-        y2={NUT_Y}
+        x1="66"
+        y1={NUT_Y - 2}
+        x2="94"
+        y2={NUT_Y - 2}
         stroke="#f0e8d8"
-        strokeWidth="2.5"
+        strokeWidth="2.2"
         strokeLinecap="round"
       />
     </svg>
@@ -405,8 +401,6 @@ export function GuitarHeadstock({
     [tuningNotes, a4],
   );
 
-  // activeIdx + activeInTune are derived from current pitch/mode, recomputed
-  // each render — feeding the persistent "tuned" tracker below.
   let activeIdx: number | null = null;
   let activeInTune = false;
   if (autoMode) {
@@ -425,9 +419,8 @@ export function GuitarHeadstock({
     }
   }
 
-  // Sustained-tuned tracking. A string is "tuned" once it stays in tune
-  // (cents ≤ ±5) for ≥ TUNED_SUSTAIN_MS continuous wall-clock. Reset on
-  // tuning preset change OR auto/manual mode toggle (per spec).
+  // Sustained-tuned tracking: ≥ TUNED_SUSTAIN_MS continuous in-tune. Resets on
+  // tuning preset or auto/manual mode change per spec.
   const [tuned, setTuned] = useState<boolean[]>(() =>
     Array(strings.length).fill(false),
   );
@@ -445,7 +438,6 @@ export function GuitarHeadstock({
       inTuneSinceRef.current = Array(strings.length).fill(null);
       return;
     }
-    // keep only the active string's timer running; clear others
     inTuneSinceRef.current = inTuneSinceRef.current.map((v, i) =>
       i === activeIdx ? v : null,
     );
@@ -494,7 +486,6 @@ export function GuitarHeadstock({
       <div key={peg.idx} className="absolute" style={wrapperStyle}>
         <StringButton
           noteName={s.noteName}
-          octave={s.octave}
           isActive={activeIdx === peg.idx}
           isTuned={tuned[peg.idx]}
           onClick={() =>
@@ -523,7 +514,7 @@ export function GuitarHeadstock({
       <div className="flex flex-1 items-center justify-center px-2 pb-3 min-h-0">
         <div
           className="relative h-full"
-          style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}`, maxWidth: '40vw' }}
+          style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}`, maxWidth: '36vw' }}
         >
           <HeadstockSVG />
           {LEFT_PEGS.map((p) => renderButton(p, 'left'))}
