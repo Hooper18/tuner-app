@@ -38,8 +38,9 @@ const IN_TUNE_CENTS = 5;
 const MAX_MATCH_SEMITONES = 6;
 const TUNED_SUSTAIN_MS = 1500;
 
-// SVG geometry — tall narrow acoustic headstock with V-notch top + 3 pegs per side.
-// viewBox aspect ≈ 4:9, total render aspect ≈ 1:2 per the spec.
+// Flat geometric headstock. Same topology as before — V-notch top, 3 pegs per side,
+// strings fanning to a narrow nut at the bottom — so the string-to-button mapping
+// still maps to physical guitar layout. No gradients, no wood grain.
 const VIEW_W = 160;
 const VIEW_H = 360;
 const BODY_LEFT = 28;
@@ -49,9 +50,6 @@ const PEG_TOP_Y = 80;
 const PEG_MID_Y = 160;
 const PEG_BOT_Y = 240;
 
-// Per spec: looking at the headstock from the front,
-//   left  top→bottom: D3 (idx 2), A2 (idx 1), E2 (idx 0)
-//   right top→bottom: G3 (idx 3), B3 (idx 4), E4 (idx 5)
 const LEFT_PEGS: { y: number; idx: number }[] = [
   { y: PEG_TOP_Y, idx: 2 }, // D3
   { y: PEG_MID_Y, idx: 1 }, // A2
@@ -63,24 +61,22 @@ const RIGHT_PEGS: { y: number; idx: number }[] = [
   { y: PEG_BOT_Y, idx: 5 }, // E4
 ];
 
-// Low strings thicker, high strings thinner.
 const STRING_WIDTHS: Record<number, number> = {
-  0: 1.0, // E2
-  1: 0.9, // A2
-  2: 0.8, // D3
-  3: 0.7, // G3
-  4: 0.6, // B3
-  5: 0.5, // E4
+  0: 1.0,
+  1: 0.9,
+  2: 0.8,
+  3: 0.7,
+  4: 0.6,
+  5: 0.5,
 };
 
-// Per-string nut x-position — 6 grooves spread across a narrow nut at the body bottom.
 const NUT_X: Record<number, number> = {
-  0: 70, // E2 (leftmost groove)
-  1: 74, // A2
-  2: 78, // D3
-  3: 82, // G3
-  4: 86, // B3
-  5: 90, // E4 (rightmost groove)
+  0: 70,
+  1: 74,
+  2: 78,
+  3: 82,
+  4: 86,
+  5: 90,
 };
 
 function pickClosestString(strings: StringInfo[], midiNote: number): number | null {
@@ -108,25 +104,22 @@ function ModeToggle({
   autoLabel: string;
   manualLabel: string;
 }) {
+  const segment = (active: boolean, label: string) => (
+    <span
+      className={`rounded-full px-4 py-1.5 transition-colors ${
+        active ? 'bg-fg font-medium text-deep' : 'text-fg-mute'
+      }`}
+    >
+      {label}
+    </span>
+  );
   return (
     <button
       onClick={onToggle}
-      className="flex items-center rounded-full bg-elev p-0.5 text-sm"
+      className="flex items-center rounded-full border border-line-strong bg-transparent p-0.5 text-[13px]"
     >
-      <span
-        className={`rounded-full px-3 py-1 transition-colors ${
-          autoMode ? 'bg-elev-2 font-medium text-fg' : 'text-fg-mute'
-        }`}
-      >
-        {autoLabel}
-      </span>
-      <span
-        className={`rounded-full px-3 py-1 transition-colors ${
-          !autoMode ? 'bg-elev-2 font-medium text-fg' : 'text-fg-mute'
-        }`}
-      >
-        {manualLabel}
-      </span>
+      {segment(autoMode, autoLabel)}
+      {segment(!autoMode, manualLabel)}
     </button>
   );
 }
@@ -142,29 +135,24 @@ function StringButton({
   isTuned: boolean;
   onClick: () => void;
 }) {
-  // Per spec: only the note letter — no octave digit. Default = subtle dark fill +
-  // visibly muted border + white text. Active = full-white border. Tuned = green
-  // text & border (background unchanged) plus a one-shot pop animation.
-  // (Note: `border-line/70` was too low-contrast on bg-deep — switched to
-  // `border-fg-mute/55` so the circle outline is clearly readable.)
   const state = isTuned
-    ? 'border-accent text-accent animate-tune-pop'
+    ? 'border-accent text-accent bg-elev'
     : isActive
-    ? 'border-fg text-fg'
-    : 'border-fg-mute/55 text-fg';
+    ? 'border-fg text-fg bg-elev-2'
+    : 'border-fg-dim text-fg bg-elev';
 
   return (
     <button
       onClick={onClick}
-      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-solid bg-elev/40 transition-colors duration-200 active:scale-95 ${state}`}
+      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 active:scale-95 ${state}`}
     >
-      <span className="text-lg font-semibold leading-none">{noteName}</span>
+      <span className="text-[15px] font-medium leading-none">{noteName}</span>
     </button>
   );
 }
 
 function HeadstockSVG() {
-  // Tall narrow body, mostly straight sides, V-notch dipping at the top center.
+  // Flat headstock: subtle elevated fill + hairline border. No gradients, no grain.
   const bodyPath =
     `M 80 22 ` +
     `L 75 10 ` +
@@ -187,139 +175,69 @@ function HeadstockSVG() {
       style={{ overflow: 'visible' }}
       aria-hidden
     >
-      <defs>
-        <linearGradient id="hs-wood-v" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#8B6914" />
-          <stop offset="50%" stopColor="#6B4226" />
-          <stop offset="100%" stopColor="#4A2C14" />
-        </linearGradient>
-        <linearGradient id="hs-wood-h" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="rgba(20,10,4,0.5)" />
-          <stop offset="20%" stopColor="rgba(0,0,0,0)" />
-          <stop offset="80%" stopColor="rgba(0,0,0,0)" />
-          <stop offset="100%" stopColor="rgba(20,10,4,0.5)" />
-        </linearGradient>
-        <linearGradient id="hs-neck" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#3a2515" />
-          <stop offset="100%" stopColor="#1a0a04" />
-        </linearGradient>
-        <linearGradient id="hs-chrome" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#f5f5f5" />
-          <stop offset="35%" stopColor="#d4d4d4" />
-          <stop offset="60%" stopColor="#8a8a8a" />
-          <stop offset="100%" stopColor="#3a3a3a" />
-        </linearGradient>
-      </defs>
+      {/* Neck stub behind/below the body */}
+      <rect
+        x="62"
+        y={NUT_Y - 4}
+        width="36"
+        height="80"
+        fill="#2a2a2c"
+      />
 
-      {/* Neck stub — narrower piece behind/below the body */}
-      <rect x="62" y={NUT_Y - 4} width="36" height="80" fill="url(#hs-neck)" />
-
-      {/* Body */}
+      {/* Body — solid fill at #2a2a2a per spec, with a clearly visible 1px outline */}
       <path
         d={bodyPath}
-        fill="url(#hs-wood-v)"
-        stroke="#2a1a0a"
-        strokeWidth="2"
-      />
-      {/* Side shading for subtle dimensionality */}
-      <path d={bodyPath} fill="url(#hs-wood-h)" />
-
-      {/* Wood grain — subtle near-vertical wavy strokes */}
-      <g
-        opacity="0.16"
-        stroke="#1a0a04"
-        strokeWidth="0.6"
-        fill="none"
-        strokeLinecap="round"
-      >
-        <path d="M 42 30 Q 44 100 41 200 T 46 285" />
-        <path d="M 60 18 Q 62 100 58 200 T 62 290" />
-        <path d="M 80 14 Q 82 100 78 200 T 80 290" />
-        <path d="M 100 18 Q 102 100 98 200 T 100 290" />
-        <path d="M 120 30 Q 122 100 118 200 T 116 285" />
-      </g>
-
-      {/* Top edge highlight along the V-notch + corners */}
-      <path
-        d={`M ${BODY_LEFT + 2} 24 Q ${BODY_LEFT + 2} 12 38 12 L 75 12 L 80 24 L 85 12 L 122 12 Q ${BODY_RIGHT - 2} 12 ${BODY_RIGHT - 2} 24`}
-        stroke="rgba(255, 230, 175, 0.22)"
+        fill="#2a2a2c"
+        stroke="#4a4a4d"
         strokeWidth="1"
-        fill="none"
       />
 
-      {/* Tuning pegs — chrome bell knobs mounted on the body sides.
-          Geometry: handle ellipse rx=14 ry=10 with cx outside the body edge,
-          post collar 10×7 bridging handle to body. */}
+      {/* Tuning pegs — flat dark dots with a thin ring. */}
       {LEFT_PEGS.map((p) => (
         <g key={`peg-l-${p.y}`}>
-          {/* dark post collar — overlaps body edge at right end, butts handle at left */}
-          <rect
-            x="22"
-            y={p.y - 3.5}
-            width="10"
-            height="7"
-            fill="#2a2a2a"
-            stroke="#161616"
-            strokeWidth="0.4"
-            rx="1"
+          <line
+            x1={BODY_LEFT}
+            y1={p.y}
+            x2="22"
+            y2={p.y}
+            stroke="#5a5a5d"
+            strokeWidth="2"
+            strokeLinecap="round"
           />
-          {/* chrome knob extending outward (cx=12 < BODY_LEFT=28) */}
-          <ellipse
-            cx="12"
+          <circle
+            cx="14"
             cy={p.y}
-            rx="14"
-            ry="10"
-            fill="url(#hs-chrome)"
-            stroke="#404040"
-            strokeWidth="0.6"
-          />
-          {/* center detail (suggestion of a knurled center) */}
-          <ellipse cx="12" cy={p.y} rx="3.5" ry="2" fill="rgba(0,0,0,0.5)" />
-          {/* top sheen */}
-          <ellipse
-            cx="12"
-            cy={p.y - 4}
-            rx="9"
-            ry="2"
-            fill="rgba(255,255,255,0.6)"
+            r="8"
+            fill="#3a3a3d"
+            stroke="#5a5a5d"
+            strokeWidth="1"
           />
         </g>
       ))}
       {RIGHT_PEGS.map((p) => (
         <g key={`peg-r-${p.y}`}>
-          <rect
-            x="128"
-            y={p.y - 3.5}
-            width="10"
-            height="7"
-            fill="#2a2a2a"
-            stroke="#161616"
-            strokeWidth="0.4"
-            rx="1"
+          <line
+            x1={BODY_RIGHT}
+            y1={p.y}
+            x2="138"
+            y2={p.y}
+            stroke="#5a5a5d"
+            strokeWidth="2"
+            strokeLinecap="round"
           />
-          {/* cx=148 > BODY_RIGHT=132 */}
-          <ellipse
-            cx="148"
+          <circle
+            cx="146"
             cy={p.y}
-            rx="14"
-            ry="10"
-            fill="url(#hs-chrome)"
-            stroke="#404040"
-            strokeWidth="0.6"
-          />
-          <ellipse cx="148" cy={p.y} rx="3.5" ry="2" fill="rgba(0,0,0,0.5)" />
-          <ellipse
-            cx="148"
-            cy={p.y - 4}
-            rx="9"
-            ry="2"
-            fill="rgba(255,255,255,0.6)"
+            r="8"
+            fill="#3a3a3d"
+            stroke="#5a5a5d"
+            strokeWidth="1"
           />
         </g>
       ))}
 
-      {/* Strings — fan from nut to each peg, low strings thicker */}
-      <g stroke="#C0C0C0" strokeLinecap="round" opacity="0.9">
+      {/* Strings — fan from nut to each peg */}
+      <g stroke="#9a9aa1" strokeLinecap="round" opacity="0.85">
         {LEFT_PEGS.map((p) => (
           <line
             key={`str-l-${p.idx}`}
@@ -342,14 +260,14 @@ function HeadstockSVG() {
         ))}
       </g>
 
-      {/* Nut — bone-colored bar at body bottom */}
+      {/* Nut */}
       <line
         x1="66"
         y1={NUT_Y - 2}
         x2="94"
         y2={NUT_Y - 2}
-        stroke="#f0e8d8"
-        strokeWidth="2.2"
+        stroke="#bdbdc4"
+        strokeWidth="2"
         strokeLinecap="round"
       />
     </svg>
@@ -359,7 +277,7 @@ function HeadstockSVG() {
 function ChromaticRing({ pitch }: { pitch: PitchData | null }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center px-6">
-      <div className="grid w-full max-w-md grid-cols-6 gap-2.5">
+      <div className="grid w-full max-w-md grid-cols-6 gap-2">
         {NOTE_NAMES.map((note) => {
           const isActive = pitch?.noteName === note;
           const inTune =
@@ -367,12 +285,12 @@ function ChromaticRing({ pitch }: { pitch: PitchData | null }) {
           return (
             <div
               key={note}
-              className={`flex h-12 items-center justify-center rounded-full border text-base font-medium transition-colors duration-150 ${
+              className={`flex h-11 items-center justify-center rounded-full border text-[14px] font-medium transition-colors duration-150 ${
                 inTune
                   ? 'border-accent bg-accent text-deep'
                   : isActive
-                  ? 'border-accent-warn bg-elev-2 text-fg'
-                  : 'border-line bg-elev text-fg-dim'
+                  ? 'border-fg bg-elev text-fg'
+                  : 'border-line text-fg-mute'
               }`}
             >
               {note}
@@ -428,8 +346,6 @@ export function GuitarHeadstock({
     }
   }
 
-  // Sustained-tuned tracking: ≥ TUNED_SUSTAIN_MS continuous in-tune. Resets on
-  // tuning preset or auto/manual mode change per spec.
   const [tuned, setTuned] = useState<boolean[]>(() =>
     Array(strings.length).fill(false),
   );
@@ -511,7 +427,7 @@ export function GuitarHeadstock({
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="flex shrink-0 items-center justify-end px-4 pt-2 pb-1">
+      <div className="flex shrink-0 items-center justify-end px-4 pt-3 pb-1">
         <ModeToggle
           autoMode={autoMode}
           onToggle={onModeToggle}
@@ -520,7 +436,7 @@ export function GuitarHeadstock({
         />
       </div>
 
-      <div className="flex flex-1 items-center justify-center px-2 pb-3 min-h-0">
+      <div className="flex flex-1 items-center justify-center px-2 pb-4 min-h-0">
         <div
           className="relative h-full"
           style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}`, maxWidth: '36vw' }}
